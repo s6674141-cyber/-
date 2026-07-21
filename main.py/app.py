@@ -102,14 +102,8 @@ st.sidebar.title("🛠️ 水電倉管系統")
 st.sidebar.markdown("---")
 page = st.sidebar.radio(
     "請選擇系統功能分頁：",
-    ["📦 材料庫存管理", "🔨 工具資產追蹤", "📊 數據分析儀表板", "📜 歷史異動紀錄"]
+    ["📦 材料庫存管理", "🔨 工具資產追蹤", "📊 數據分析儀表板", "📜 歷史異動紀錄", "⚙️ 管理員安全後台"]
 )
-
-st.sidebar.markdown("---")
-if st.sidebar.button("🔄 重置工具資料庫 (載入30筆)"):
-    pd.DataFrame(get_new_tools_data()).to_csv(TOOLS_FILE, index=False, encoding="utf-8-sig")
-    st.sidebar.success("✅ 工具資料庫已成功重置為 30 筆最新清單！")
-    st.rerun()
 
 # -------------------------------------------------------------------
 # 分頁 1：材料庫存管理
@@ -199,7 +193,6 @@ if page == "📦 材料庫存管理":
                 st.success(f"✅ 成功新增品項：[{new_id}] {new_name}")
                 st.rerun()
 
-    # 🆕 編輯/修改材料資料頁籤
     with tab4:
         st.subheader("✏️ 修改既有材料名稱、分類或安全庫存")
         selected_edit_mat = st.selectbox("選擇要修改的材料", df_mat["材料編號"] + " - " + df_mat["材料名稱"], key="edit_mat_sel")
@@ -312,7 +305,6 @@ elif page == "🔨 工具資產追蹤":
         else:
             st.success("🎉 目前所有工具皆在庫，沒有外借中的工具！")
 
-    # 🆕 編輯/修改工具資料頁籤
     with tab_te:
         st.subheader("✏️ 修改工具編號、名稱或所屬類別")
         selected_edit_tool = st.selectbox("選擇要修改的工具", df_tools["工具編號"] + " - " + df_tools["工具名稱"], key="edit_tool_sel")
@@ -390,3 +382,36 @@ elif page == "📜 歷史異動紀錄":
     st.header("📜 系統完整流水帳歷程")
     df_logs = pd.read_csv(LOGS_FILE, encoding="utf-8-sig")
     st.dataframe(df_logs.sort_index(ascending=False), use_container_width=True)
+
+# -------------------------------------------------------------------
+# 分頁 5：⚙️ 管理員安全後台 (包含一鍵重置與密碼保護)
+# -------------------------------------------------------------------
+elif page == "⚙️ 管理員安全後台":
+    st.header("⚙️ 倉管系統管理員專屬後台")
+    st.caption("🔒 本區域為管理員權限，一般師傅與使用者請勿操作。")
+    st.markdown("---")
+    
+    # 簡單的密碼驗證鎖 (預設密碼: admin123)
+    pwd = st.text_input("🔑 請輸入管理員通行密碼", type="password")
+    
+    if pwd == "admin123":
+        st.success("🔓 管理員驗證成功！")
+        st.markdown("---")
+        
+        st.subheader("🔄 工具資產資料庫歸零重置")
+        st.warning("⚠️ **警告：** 此功能會將目前所有工具的狀態強制「重新歸零」，回復至預設 30 筆工具皆為【在庫】且無外借人的初始狀態！")
+        
+        # 加上二次確認 Checkbox，避免誤觸
+        confirm_reset = st.checkbox("我了解此操作影響，確定要重置工具資料庫")
+        
+        if st.button("🔥 確定執行工具資料庫重置"):
+            if confirm_reset:
+                pd.DataFrame(get_new_tools_data()).to_csv(TOOLS_FILE, index=False, encoding="utf-8-sig")
+                add_log("系統重置", "工具資料庫", "重置樣版", "管理員執行資料庫重置")
+                st.success("✅ 工具資料庫已順利重置為預設 30 筆【在庫】狀態！")
+                st.rerun()
+            else:
+                st.error("❌ 請先勾選上方「我了解此操作...」的核取方塊以確認執行。")
+                
+    elif pwd != "":
+        st.error("❌ 密碼錯誤，無法開啟管理員權限！")
