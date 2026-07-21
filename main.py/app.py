@@ -29,7 +29,7 @@ TOOLS_FILE = "tools.csv"
 LOGS_FILE = "logs.csv"
 
 # -------------------------------------------------------------------
-# 2. 資料庫初始化與讀寫邏輯 (防呆自動修復舊 CSV 欄位)
+# 2. 資料庫初始化與讀寫邏輯
 # -------------------------------------------------------------------
 def get_new_tools_data():
     return [
@@ -75,7 +75,6 @@ def init_databases():
         ])
         df_mat.to_csv(MATERIALS_FILE, index=False, encoding="utf-8-sig")
 
-    # 檢查工具資料庫，如果不存在或缺少「分類」欄位，強制更新成最新的 30 筆資料
     if not os.path.exists(TOOLS_FILE):
         pd.DataFrame(get_new_tools_data()).to_csv(TOOLS_FILE, index=False, encoding="utf-8-sig")
     else:
@@ -137,8 +136,8 @@ if page == "📦 材料庫存管理":
     
     st.markdown("---")
     
-    st.subheader("🔄 庫存異動操作面板")
-    tab1, tab2, tab3 = st.tabs(["📤 師傅領料登記", "📥 進貨入庫登記", "➕ 新增材料品項"])
+    st.subheader("🔄 庫存異動與資料編輯面板")
+    tab1, tab2, tab3, tab4 = st.tabs(["📤 師傅領料登記", "📥 進貨入庫登記", "➕ 新增材料品項", "✏️ 修改/編輯材料資料"])
     
     with tab1:
         with st.form("borrow_material_form"):
@@ -200,6 +199,40 @@ if page == "📦 材料庫存管理":
                 st.success(f"✅ 成功新增品項：[{new_id}] {new_name}")
                 st.rerun()
 
+    # 🆕 編輯/修改材料資料頁籤
+    with tab4:
+        st.subheader("✏️ 修改既有材料名稱、分類或安全庫存")
+        selected_edit_mat = st.selectbox("選擇要修改的材料", df_mat["材料編號"] + " - " + df_mat["材料名稱"], key="edit_mat_sel")
+        
+        if selected_edit_mat:
+            edit_m_id = selected_edit_mat.split(" - ")[0]
+            m_idx = df_mat[df_mat["材料編號"] == edit_m_id].index[0]
+            
+            with st.form("edit_material_form"):
+                col_e1, col_e2 = st.columns(2)
+                with col_e1:
+                    edit_name = st.text_input("材料名稱", value=df_mat.loc[m_idx, "材料名稱"])
+                    edit_cat = st.text_input("分類名稱", value=df_mat.loc[m_idx, "分類"])
+                    edit_unit = st.text_input("計算單位", value=df_mat.loc[m_idx, "單位"])
+                with col_e2:
+                    edit_qty = st.number_input("目前庫存數量", value=int(df_mat.loc[m_idx, "目前庫存"]), min_value=0, step=1)
+                    edit_safe_qty = st.number_input("安全庫存門檻", value=int(df_mat.loc[m_idx, "安全庫存量"]), min_value=1, step=1)
+                    
+                submit_edit_mat = st.form_submit_button("💾 儲存修改內容")
+                
+                if submit_edit_mat:
+                    old_name = df_mat.loc[m_idx, "材料名稱"]
+                    df_mat.loc[m_idx, "材料名稱"] = edit_name
+                    df_mat.loc[m_idx, "分類"] = edit_cat
+                    df_mat.loc[m_idx, "單位"] = edit_unit
+                    df_mat.loc[m_idx, "目前庫存"] = edit_qty
+                    df_mat.loc[m_idx, "安全庫存量"] = edit_safe_qty
+                    
+                    df_mat.to_csv(MATERIALS_FILE, index=False, encoding="utf-8-sig")
+                    add_log("資料修改", edit_name, "更正資料", f"原名: {old_name}")
+                    st.success(f"✅ 成功更新材料 [{edit_m_id}] 資料！")
+                    st.rerun()
+
 # -------------------------------------------------------------------
 # 分頁 2：工具資產追蹤
 # -------------------------------------------------------------------
@@ -208,7 +241,6 @@ elif page == "🔨 工具資產追蹤":
     
     df_tools = pd.read_csv(TOOLS_FILE, encoding="utf-8-sig")
     
-    # 再次防呆：確保欄位齊全
     if "分類" not in df_tools.columns:
         pd.DataFrame(get_new_tools_data()).to_csv(TOOLS_FILE, index=False, encoding="utf-8-sig")
         df_tools = pd.read_csv(TOOLS_FILE, encoding="utf-8-sig")
@@ -235,10 +267,9 @@ elif page == "🔨 工具資產追蹤":
     
     st.markdown("---")
     
-    col_b, col_r = st.columns(2)
+    tab_tb, tab_tr, tab_te = st.tabs(["📤 登記工具借出", "📥 登記工具歸還", "✏️ 修改/編輯工具資料"])
     
-    with col_b:
-        st.subheader("📤 登記工具借出")
+    with tab_tb:
         in_stock_tools = df_tools[df_tools["狀態"] == "在庫"]
         if not in_stock_tools.empty:
             tool_to_borrow = st.selectbox("選擇要借出的工具", in_stock_tools["工具編號"] + " - " + in_stock_tools["工具名稱"])
@@ -262,8 +293,7 @@ elif page == "🔨 工具資產追蹤":
         else:
             st.info("目前所有工具皆外借中，無在庫工具。")
 
-    with col_r:
-        st.subheader("📥 登記工具歸還")
+    with tab_tr:
         if not borrowed_df.empty:
             tool_to_return = st.selectbox("選擇要歸還的工具", borrowed_df["工具編號"] + " - " + borrowed_df["工具名稱"])
             if st.button("確認登記歸還"):
@@ -281,6 +311,36 @@ elif page == "🔨 工具資產追蹤":
                 st.rerun()
         else:
             st.success("🎉 目前所有工具皆在庫，沒有外借中的工具！")
+
+    # 🆕 編輯/修改工具資料頁籤
+    with tab_te:
+        st.subheader("✏️ 修改工具編號、名稱或所屬類別")
+        selected_edit_tool = st.selectbox("選擇要修改的工具", df_tools["工具編號"] + " - " + df_tools["工具名稱"], key="edit_tool_sel")
+        
+        if selected_edit_tool:
+            edit_t_id = selected_edit_tool.split(" - ")[0]
+            t_idx = df_tools[df_tools["工具編號"] == edit_t_id].index[0]
+            
+            with st.form("edit_tool_form"):
+                col_te1, col_te2 = st.columns(2)
+                with col_te1:
+                    edit_tool_id = st.text_input("工具編號", value=df_tools.loc[t_idx, "工具編號"])
+                    edit_tool_name = st.text_input("工具名稱", value=df_tools.loc[t_idx, "工具名稱"])
+                with col_te2:
+                    edit_tool_cat = st.text_input("分類名稱 (例如: 照明工具 (F))", value=df_tools.loc[t_idx, "分類"])
+                    
+                submit_edit_tool = st.form_submit_button("💾 儲存修改內容")
+                
+                if submit_edit_tool:
+                    old_t_name = df_tools.loc[t_idx, "工具名稱"]
+                    df_tools.loc[t_idx, "工具編號"] = edit_tool_id
+                    df_tools.loc[t_idx, "工具名稱"] = edit_tool_name
+                    df_tools.loc[t_idx, "分類"] = edit_tool_cat
+                    
+                    df_tools.to_csv(TOOLS_FILE, index=False, encoding="utf-8-sig")
+                    add_log("工具資料修改", edit_tool_name, "更正資料", f"原名: {old_t_name}")
+                    st.success(f"✅ 成功更新工具 [{edit_tool_id}] 資料！")
+                    st.rerun()
 
 # -------------------------------------------------------------------
 # 分頁 3：數據分析儀表板
