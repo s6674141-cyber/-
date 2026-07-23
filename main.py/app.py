@@ -257,7 +257,7 @@ if page == "📦 材料庫存管理":
         st.markdown("---")
         
         st.subheader("🔄 庫存異動與資料編輯面板")
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📤 師傅領料登記", "📥 進貨入庫登記", "➕ 新增材料品項", "✏️ 修改/編輯材料資料", "🗑️ 刪除材料品項"])
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📤 師傅領料登記", "📥 進貨入庫登記", "➕ 新增材料品項", "✏️ 修改/編輯材料資料", "🗑️ 刪除材料品項", "📤 批次匯入 CSV"])
         
         with tab1:
             with st.form("borrow_material_form"):
@@ -389,7 +389,57 @@ if page == "📦 材料庫存管理":
                         st.rerun()
                     else:
                         st.error("❌ 請先勾選上方「我確定要刪除...」核取方塊！")
-
+with tab6:
+            st.subheader("📤 批次匯入材料 CSV 檔案")
+            st.caption("請上傳符合格式的 CSV 檔案，將自動追加或覆蓋至雲端資料庫。")
+            
+            uploaded_file = st.file_uploader("選擇要上傳的材料 CSV 檔", type=["csv"])
+            
+            if uploaded_file is not None:
+                try:
+                    # 讀取上傳的 CSV 檔案
+                    import_df = pd.read_csv(uploaded_file)
+                    st.write("📋 預覽即將匯入的資料：")
+                    st.dataframe(import_df, use_container_width=True)
+                    
+                    import_mode = st.radio("請選擇匯入模式：", ["追加至現有資料庫底部", "完全覆蓋現有資料庫 (請謹慎使用)"])
+                    
+                    if st.button("🚀 確認執行匯入"):
+                        # 確保必要的欄位都有存在
+                        required_cols = ["材料名稱", "分類", "目前庫存", "安全庫存量", "單位"]
+                        missing_cols = [c for c in required_cols if c not in import_df.columns]
+                        
+                        if missing_cols:
+                            st.error(f"❌ 上傳的 CSV 缺少必要的欄位：{ missing_cols }，請修正後重試！")
+                        else:
+                            # 補齊規格/尺寸欄位（若原本 CSV 沒有）
+                            if "規格/尺寸" not in import_df.columns:
+                                import_df["規格/尺寸"] = "無"
+                                
+                            if import_mode == "完全覆蓋現有資料庫 (請謹慎使用)":
+                                # 若沒有材料編號，自動生成
+                                if "材料編號" not in import_df.columns:
+                                    import_df["材料編號"] = [f"M{i+1:03d}" for i in range(len(import_df))]
+                                final_df = import_df
+                            else:
+                                # 追加模式：生成新的編號並與原有資料合併
+                                start_id = len(df_mat) + 1
+                                if "材料編號" not in import_df.columns:
+                                    import_df["材料編號"] = [f"M{i+start_id:03d}" for i in range(len(import_df))]
+                                final_df = pd.concat([df_mat, import_df], ignore_index=True)
+                            
+                            # 重新依預設欄位順序整理
+                            cols_order = ["材料編號", "材料名稱", "規格/尺寸", "分類", "目前庫存", "安全庫存量", "單位"]
+                            final_df = final_df[cols_order]
+                            
+                            # 覆寫至 Google Sheets
+                            save_data(sheet_mat, final_df)
+                            add_log_gsheet("批次匯入", uploaded_file.name, f"匯入 {len(import_df)} 筆資料", f"模式: {import_mode}")
+                            st.success(f"🎉 成功匯入 {len(import_df)} 筆材料資料至 Google Sheets！")
+                            st.rerun()
+                            
+                except Exception as e:
+                    st.error(f"❌ 讀取 CSV 檔案失敗，請確認檔案編碼是否為 UTF-8！錯誤資訊：{e}")
 # -------------------------------------------------------------------
 # 分頁 2：工具資產追蹤 (含維修/保養流程)
 # -------------------------------------------------------------------
