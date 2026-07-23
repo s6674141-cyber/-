@@ -398,6 +398,15 @@ if page == "📦 材料庫存管理":
             if uploaded_file is not None:
                 try:
                     # 讀取上傳的 CSV 檔案
+                    import_df = pd.read_csv(uploaded_file)with tab6:
+            st.subheader("📤 批次匯入材料 CSV 檔案")
+            st.caption("請上傳符合格式的 CSV 檔案，將自動追加或覆蓋至雲端資料庫。")
+            
+            uploaded_file = st.file_uploader("選擇要上傳的材料 CSV 檔", type=["csv"])
+            
+            if uploaded_file is not None:
+                try:
+                    # 讀取上傳的 CSV 檔案
                     import_df = pd.read_csv(uploaded_file)
                     st.write("📋 預覽即將匯入的資料：")
                     st.dataframe(import_df, use_container_width=True)
@@ -440,7 +449,6 @@ if page == "📦 材料庫存管理":
                             
                 except Exception as e:
                     st.error(f"❌ 讀取 CSV 檔案失敗，請確認檔案編碼是否為 UTF-8！錯誤資訊：{e}")
-
 # -------------------------------------------------------------------
 # 分頁 2：工具資產追蹤 (含維修/保養流程)
 # -------------------------------------------------------------------
