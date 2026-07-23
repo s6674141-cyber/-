@@ -36,9 +36,25 @@ custom_css = """
         background-color: #F8F9FA;
     }
 
-    .stAppToolbar, [data-testid="stToolbar"] { display: none !important; }
-    #MainMenu, header, footer { visibility: hidden !important; display: none !important; }
+   /* 隱藏右上角 GitHub / Streamlit 選單，但保留左上角側邊欄展開/收合箭頭按鈕 */
+[data-testid="stHeader"] {
+    background-color: transparent !important;
+}
+[data-testid="stHeader"] [data-testid="stToolbar"] {
+    display: none !important;
+}
+footer { visibility: hidden !important; display: none !important; }
 
+/* 美化左上角的側邊欄展開箭頭按鈕 (讓它明顯可點擊) */
+[data-testid="stSidebarCollapseButton"] {
+    background-color: #1E293B !important;
+    color: #FFFFFF !important;
+    border-radius: 8px !important;
+    margin: 8px !important;
+}
+[data-testid="stSidebarCollapseButton"]:hover {
+    background-color: #2563EB !important;
+}
     section[data-testid="stSidebar"] {
         background-color: #1E293B !important;
     }
