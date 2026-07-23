@@ -36,50 +36,20 @@ custom_css = """
         background-color: #F8F9FA;
     }
 
-    /* 1. 精準隱藏右上角工具列 (GitHub / 選單)，但確保 Header 本身可以穿透點擊 */
-    [data-testid="stHeader"] {
-        background-color: transparent !important;
-        z-index: 999990 !important;
-    }
-    [data-testid="stToolbar"], #MainMenu {
+    /* 💡 只隱藏右上角 GitHub / Deploy / 三點選單，完整保留頂部 Header 與側邊欄展開箭頭 */
+    [data-testid="stAppDeployButton"], 
+    #MainMenu, 
+    footer {
+        visibility: hidden !important;
         display: none !important;
     }
-    footer { visibility: hidden !important; display: none !important; }
 
-    /* 2. 修復並美化左上角「側邊欄展開/收合」箭頭按鈕 (全版本 Streamlit 通用) */
-    [data-testid="stSidebarCollapseButton"], 
-    [data-testid="collapsedControl"],
-    button[aria-label*="sidebar"],
-    button[data-testid="stBaseButton-header"] {
-        display: flex !important;
-        visibility: visible !important;
-        background-color: #1E293B !important;
-        color: #FFFFFF !important;
-        border-radius: 8px !important;
-        margin: 8px !important;
-        border: 1px solid #334155 !important;
-        z-index: 999999 !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important;
+    /* 讓頂部 Header 變成透明背景，避免擋住內容 */
+    [data-testid="stHeader"] {
+        background-color: transparent !important;
     }
 
-    /* 調整按鈕內的 SVG 箭頭圖示顏色為亮白 */
-    [data-testid="stSidebarCollapseButton"] svg, 
-    [data-testid="collapsedControl"] svg,
-    button[aria-label*="sidebar"] svg {
-        fill: #FFFFFF !important;
-        color: #FFFFFF !important;
-        stroke: #FFFFFF !important;
-    }
-
-    /* Hover 懸停效果：變亮藍色 */
-    [data-testid="stSidebarCollapseButton"]:hover, 
-    [data-testid="collapsedControl"]:hover,
-    button[aria-label*="sidebar"]:hover {
-        background-color: #2563EB !important;
-        border-color: #3B82F6 !important;
-    }
-
-    /* 3. 側邊欄深色風格設定 */
+    /* 側邊欄深色風格 */
     section[data-testid="stSidebar"] {
         background-color: #1E293B !important;
     }
@@ -100,7 +70,7 @@ custom_css = """
         font-weight: 700 !important;
     }
 
-    /* 4. 按鈕美化 */
+    /* 按鈕美化 */
     .stButton>button {
         border-radius: 8px !important;
         font-weight: 600 !important;
@@ -113,7 +83,7 @@ custom_css = """
         box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2) !important;
     }
 
-    /* 5. 頁籤與表格美化 */
+    /* 頁籤與表格美化 */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: #E2E8F0;
@@ -133,7 +103,6 @@ custom_css = """
     </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
-
 # -------------------------------------------------------------------
 # 1. Google Sheets 雲端資料庫連線邏輯
 # -------------------------------------------------------------------
