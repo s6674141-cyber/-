@@ -8,6 +8,7 @@ import re
 import plotly.express as px
 import plotly.graph_objects as go
 from groq import Groq
+
 # -------------------------------------------------------------------
 # 0. 頁面基本設定 (預設展開側邊欄)
 # -------------------------------------------------------------------
@@ -22,7 +23,7 @@ st.set_page_config(
 )
 
 # -------------------------------------------------------------------
-# 🎨 UI / CSS (v3.5 Full BI Edition 簡約質感深色風)
+# 🎨 UI / CSS (簡約質感主題)
 # -------------------------------------------------------------------
 custom_css = """
     <style>
@@ -100,7 +101,7 @@ custom_css = """
 st.markdown(custom_css, unsafe_allow_html=True)
 
 # -------------------------------------------------------------------
-# 1. Google Sheets 雲端資料庫連線邏輯
+# 1. Google Sheets 雲端資料庫連線邏輯 (加入高效能 Cache 機制)
 # -------------------------------------------------------------------
 @st.cache_resource
 def get_gsheet_client():
@@ -109,12 +110,20 @@ def get_gsheet_client():
     creds = Credentials.from_service_account_info(credentials_info, scopes=scope)
     return gspread.authorize(creds)
 
+# ⚡ 使用 st.cache_data 暫存資料 60 秒，大大提升讀取與搜尋速度！
+@st.cache_data(ttl=60, show_spinner=False)
+def fetch_gsheet_records(worksheet_name):
+    client = get_gsheet_client()
+    sheet = client.open("水電仓管資料庫").worksheet(worksheet_name)
+    data = sheet.get_all_records()
+    return pd.DataFrame(data)
+
 def load_data(worksheet_name):
     try:
         client = get_gsheet_client()
         sheet = client.open("水電倉管資料庫").worksheet(worksheet_name)
-        data = sheet.get_all_records()
-        return pd.DataFrame(data), sheet
+        df = fetch_gsheet_records(worksheet_name)
+        return df, sheet
     except Exception as e:
         if worksheet_name == "projects":
             try:
@@ -131,6 +140,7 @@ def load_data(worksheet_name):
 def save_data(sheet, df):
     sheet.clear()
     sheet.update([df.columns.values.tolist()] + df.astype(str).values.tolist())
+    st.cache_data.clear() # 寫入成功後自動清除快取，確保下一秒讀到最新資料
 
 def add_log_gsheet(action_type, item_name, detail, note=""):
     df_logs, sheet_logs = load_data("logs")
@@ -194,7 +204,7 @@ if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
 
 st.sidebar.markdown("### ⚡ ProStock 雲端倉管與 BI")
-st.sidebar.caption("v4.5 Full BI + AI Assistant")
+st.sidebar.caption("v4.8 High-Performance Edition")
 st.sidebar.markdown("---")
 
 role = st.sidebar.radio("👤 使用者權限切換：", ["👷 現場作業員 (師傅)", "🔑 系統管理員"])
@@ -241,41 +251,34 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
     st.caption("基於全公司實體倉管、專案預算與流水帳數據的即時 AI 決策諮詢 (Powered by Groq LLaMA 3.1)")
     st.markdown("---")
     
-    # 檢查是否設定 GROQ_API_KEY
     if "GROQ_API_KEY" not in st.secrets:
         st.error("⚠️ 未在 Secrets 中找到 `GROQ_API_KEY`，請完成設定以啟用 AI 助理。")
     else:
         api_key = st.secrets["GROQ_API_KEY"].strip()
         client = Groq(api_key=api_key)
         
-        # 初始化聊天歷史
         if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = [
                 {"role": "assistant", "content": "老闆您好！我是您的 AI 經營決策助理。您可以問我任何關於專案材料預算消化率、高價值耗材領用情況、工具設備維修 TCO 評估，或是 2025 全年金流趨勢的問題，我會為您做精準分析！"}
             ]
             
-        # 展示歷史訊息
         for msg in st.session_state.chat_messages:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
                 
-        # 使用者輸入框
         if prompt := st.chat_input("請輸入您想詢問的經營數據問題 (例如: 高價值耗材領用情況)"):
             st.session_state.chat_messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.markdown(prompt)
                 
-            # 準備向 AI 傳送 Prompt
             with st.chat_message("assistant"):
                 with st.spinner("🤖 AI 正在讀取並分析公司資料庫中..."):
                     try:
-                        # 1. 抓取最新數據快照
                         df_logs, _ = load_data("logs")
                         df_mat, _ = load_data("materials")
                         df_proj, _ = load_data("projects")
                         df_tools, _ = load_data("tools")
                         
-                        # 摘要數據
                         mat_summary = df_mat[["材料名稱", "目前庫存", "安全庫存量", "單價"]].head(50).to_string() if not df_mat.empty else "無"
                         proj_summary = df_proj.to_string() if not df_proj.empty else "無"
                         tools_summary = df_tools[["工具名稱", "品牌/廠牌", "型號", "新機購入單價", "狀態"]].head(40).to_string() if not df_tools.empty else "無"
@@ -298,7 +301,6 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
                         {logs_sample}
                         """
                         
-                        # 2. 呼叫 Groq 免費且強大的 llama-3.1-70b-versatile 或 8b 模型
                         response = client.chat.completions.create(
                             model="llama-3.1-8b-instant",
                             messages=[
@@ -314,8 +316,9 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
                         st.session_state.chat_messages.append({"role": "assistant", "content": ai_reply})
                     except Exception as e:
                         st.error(f"❌ AI 分析失敗：{e}")
+
 # -------------------------------------------------------------------
-# 分頁 A：📦 材料領用與進貨 (一般員工)
+# 分頁 A：📦 材料領用與進貨 (原汁原味經典介面)
 # -------------------------------------------------------------------
 elif page == "📦 材料領用與進貨":
     st.title("📦 材料領用與進貨登記")
@@ -537,13 +540,11 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
     df_tools, _ = load_data("tools")
     
     if not df_mat.empty:
-        # 1. 整理單價數據
         if "單價" not in df_mat.columns: df_mat["單價"] = 0
         df_mat["單價"] = pd.to_numeric(df_mat["單價"], errors='coerce').fillna(0)
         df_mat["目前庫存"] = pd.to_numeric(df_mat["目前庫存"], errors='coerce').fillna(0)
         price_dict = dict(zip(df_mat["材料名稱"].astype(str), df_mat["單價"]))
         
-        # 2. 解析領料與維修日誌
         usage_logs = df_logs[df_logs["類型"] == "領料出庫"].copy() if not df_logs.empty else pd.DataFrame()
         repair_logs = df_logs[df_logs["類型"] == "工具送修"].copy() if not df_logs.empty else pd.DataFrame()
         
@@ -571,9 +572,6 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
             usage_logs["消耗金額"] = 0
             usage_logs["工程案名稱"] = "無"
 
-        # ---------------------------------------------------------------
-        # 📊 頂部 KPI 卡片區
-        # ---------------------------------------------------------------
         total_budget = pd.to_numeric(df_proj["材料總預算"], errors='coerce').sum() if not df_proj.empty else 0
         total_spent = usage_logs["消耗金額"].sum() if not usage_logs.empty else 0
         df_mat["庫存總價值"] = df_mat["目前庫存"] * df_mat["單價"]
@@ -587,11 +585,7 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # ---------------------------------------------------------------
-        # 【圖表 1】專案材料預算 vs 實際消耗金額
-        # ---------------------------------------------------------------
         st.markdown("##### 📈 【圖表 1】專案材料預算 vs 實際消耗金額 (Budget vs. Actual Cost)")
-        
         if not df_proj.empty:
             df_proj["材料總預算"] = pd.to_numeric(df_proj["材料總預算"], errors='coerce').fillna(0)
             cost_summary = usage_logs.groupby("工程案名稱")["消耗金額"].sum().reset_index() if not usage_logs.empty else pd.DataFrame(columns=["工程案名稱", "消耗金額"])
@@ -634,9 +628,6 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
 
         st.markdown("---")
         
-        # ---------------------------------------------------------------
-        # 【圖表 2A & 2B】動態領用 Top 5 vs 靜態庫存資產 Top 5
-        # ---------------------------------------------------------------
         col_a, col_b = st.columns(2)
         
         with col_a:
@@ -682,9 +673,6 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
 
         st.markdown("---")
         
-        # ---------------------------------------------------------------
-        # 【圖表 3】高頻損壞 / 設備報修警報 (TCO 分析)
-        # ---------------------------------------------------------------
         st.markdown("##### 🚨 【圖表 3】高頻損壞 / 設備報修警報 (TCO 總持有成本分析)")
         if not df_tools.empty:
             if "新機購入單價" not in df_tools.columns: df_tools["新機購入單價"] = 0
@@ -735,9 +723,6 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
 
         st.markdown("---")
         
-        # ---------------------------------------------------------------
-        # 【圖表 4 & 5】每日領料金額動態趨勢 vs 工具外借超期滯留警報
-        # ---------------------------------------------------------------
         col_c, col_d = st.columns(2)
         
         with col_c:
