@@ -4,3 +4,4 @@ matplotlib
 gspread
 google-auth
 plotly
+google-generativeai
