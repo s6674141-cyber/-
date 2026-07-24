@@ -300,8 +300,18 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
                         使用者問題: {prompt}
                         """
                         
-                        model = genai.GenerativeModel('gemini-1.5-flash')
-                        response = model.generate_content(system_prompt)
+                        # 自動嘗試多種模型識別碼格式，避免 404
+                        try:
+                            model = genai.GenerativeModel('gemini-1.5-flash-latest')
+                            response = model.generate_content(system_prompt)
+                        except Exception:
+                            try:
+                                model = genai.GenerativeModel('gemini-2.0-flash')
+                                response = model.generate_content(system_prompt)
+                            except Exception:
+                                model = genai.GenerativeModel('models/gemini-1.5-flash')
+                                response = model.generate_content(system_prompt)
+                        
                         ai_reply = response.text
                         
                         st.markdown(ai_reply)
